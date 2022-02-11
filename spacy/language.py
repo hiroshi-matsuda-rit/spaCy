@@ -1149,6 +1149,9 @@ class Language:
                     ),
                     examples,
                 ):
+                    for t in doc[1:]:
+                        if t.is_sent_start is None:
+                            t.is_sent_start = False
                     eg.predicted = doc
         return losses
 
@@ -1348,6 +1351,7 @@ class Language:
         scorer: Optional[Scorer] = None,
         component_cfg: Optional[Dict[str, Dict[str, Any]]] = None,
         scorer_cfg: Optional[Dict[str, Any]] = None,
+        print_gold_and_pred_moves: bool = False,
     ) -> Dict[str, Union[float, dict]]:
         """Evaluate a model's pipeline components.
 
@@ -1380,7 +1384,10 @@ class Language:
         # reset annotation in predicted docs and time tokenization
         start_time = timer()
         # apply all pipeline components
+        parser = None
         for name, pipe in self.pipeline:
+            if name == "parser":
+                parser = pipe
             kwargs = component_cfg.get(name, {})
             kwargs.setdefault("batch_size", batch_size)
             for doc, eg in zip(
@@ -1393,8 +1400,24 @@ class Language:
                 ),
                 examples,
             ):
+                for t in doc[1:]:
+                    if t.is_sent_start is None:
+                        t.is_sent_start = False
                 eg.predicted = doc
         end_time = timer()
+        if print_gold_and_pred_moves:
+            for eg in examples:
+                gold_moves = parser.moves.get_oracle_sequence(eg, eg)
+                gold = eg.reference
+                eg.reference = eg.predicted
+                pred_moves = parser.moves.get_oracle_sequence(eg, eg)
+                eg.reference = gold
+                print(*gold_moves, sep="\n")
+                for t in eg.reference:
+                    print("", t.i, t.orth_, t.head.i, t.dep_, sep="\t")
+                print(*pred_moves, sep="\n", file=sys.stderr)
+                for t in eg.predicted:
+                    print("", t.i, t.orth_, t.head.i, t.dep_, sep="\t", file=sys.stderr)
         results = scorer.score(examples)
         n_words = sum(len(eg.predicted) for eg in examples)
         results["speed"] = n_words / (end_time - start_time)
