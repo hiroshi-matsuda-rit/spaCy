@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 import warnings
+import sys
 from thinc.api import get_current_ops, Config, Optimizer
 import srsly
 import multiprocessing as mp
